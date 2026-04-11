@@ -79,23 +79,31 @@ Respond ONLY with valid JSON in exactly this shape, no prose:
 }
 
 Rules:
-- breakdown: 3–8 line items, covering the main cost drivers from the node list
-- Each item.low and item.high are monthly or one-time amounts in USD (integers)
-- hidden_costs: 2–4 frequently overlooked costs (time, ops, compliance, etc.)
-- assumptions: 2–3 key assumptions that affect the estimate
-- total_low = sum of all item.low values
-- total_high = sum of all item.high values`;
+- breakdown: exactly 4–6 line items (no more), covering the main cost drivers
+- item names: max 5 words each
+- notes: max 8 words each, or omit entirely
+- hidden_costs: exactly 3 items, max 8 words each
+- assumptions: exactly 2 items, max 10 words each
+- low/high are integers in USD
+- total_low = sum of breakdown[].low, total_high = sum of breakdown[].high`;
 
   try {
     const client = getClaude();
     const response = await client.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1000,
+      max_tokens: 1800,
       messages: [{ role: "user", content: prompt }],
     });
 
     const textBlock = response.content.find((b) => b.type === "text");
     const raw = textBlock?.type === "text" ? textBlock.text : "";
+
+    // Detect truncated response (hit max_tokens before closing brace)
+    if (response.stop_reason === "max_tokens") {
+      throw new Error(
+        "Response was too long and got cut off. Try a map with fewer nodes.",
+      );
+    }
 
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");

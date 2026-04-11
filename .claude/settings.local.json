@@ -6,7 +6,8 @@
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
       "Bash(echo \"EXIT=$?\")",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(grep -n \"max_tokens\" c:/Users/ALANT/OneDrive/Документы/MindMapApp/src/app/api/ai/*/route.ts)"
     ]
   }
 }

@@ -80,12 +80,16 @@ Rules:
     const client = getClaude();
     const response = await client.messages.create({
       model: CLAUDE_MODEL,
-      max_tokens: 1200,
+      max_tokens: 1800,
       messages: [{ role: "user", content: prompt }],
     });
 
     const textBlock = response.content.find((b) => b.type === "text");
     const raw = textBlock?.type === "text" ? textBlock.text : "";
+
+    if (response.stop_reason === "max_tokens") {
+      throw new Error("Response was cut off. Try a smaller map.");
+    }
 
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");

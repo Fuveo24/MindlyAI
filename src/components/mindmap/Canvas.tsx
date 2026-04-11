@@ -70,71 +70,64 @@ function CanvasInner() {
 
   return (
     <>
-      {/* ── Top bar (all sizes) ──
-           Mobile:  [← Maps]  [● Title ✎]  [💾]
-           Desktop: same but wider title, visible label on save  */}
-      <div className="pointer-events-auto absolute left-0 right-0 top-0 z-20 flex items-center gap-2 px-3 py-3 sm:left-auto sm:right-auto sm:top-5 sm:px-0">
-        {/* Back */}
-        <Link
-          href="/maps"
-          className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-border-subtle bg-bg-card/80 px-3 py-2 text-xs font-medium text-text-muted backdrop-blur-sm transition-colors hover:text-text-primary sm:left-5 sm:px-4"
-          style={{ position: "absolute", left: "1.25rem", top: "1.25rem" }}
-        >
-          <span aria-hidden>←</span>
-          <span className="hidden sm:inline">Maps</span>
-        </Link>
+      {/* ── Back link — top-left ── */}
+      <Link
+        href="/maps"
+        className="pointer-events-auto absolute left-3 top-3 z-20 flex items-center gap-1.5 rounded-full border border-border-subtle bg-bg-card/80 px-3 py-2 text-xs font-medium text-text-muted backdrop-blur-sm transition-colors hover:text-text-primary sm:left-5 sm:top-5 sm:px-4"
+      >
+        <span aria-hidden>←</span>
+        <span className="hidden sm:inline">Maps</span>
+      </Link>
 
-        {/* Title — centered on all sizes */}
-        <div className="mx-auto" style={{ position: "absolute", left: "50%", top: "1.25rem", transform: "translateX(-50%)" }}>
-          {editingTitle ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                setMapTitle(titleDraft);
-                setEditingTitle(false);
-              }}
-            >
-              <input
-                autoFocus
-                className="w-40 rounded-full border border-accent-violet/40 bg-bg-card/80 px-3 py-2 text-xs font-semibold text-text-primary outline-none backdrop-blur-sm sm:w-52"
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={() => { setMapTitle(titleDraft); setEditingTitle(false); }}
-              />
-            </form>
-          ) : (
-            <button
-              onClick={() => { setTitleDraft(mapTitle); setEditingTitle(true); }}
-              className="flex items-center gap-2 rounded-full border border-border-subtle bg-bg-card/80 px-3 py-2 backdrop-blur-sm transition-colors hover:border-accent-violet/40"
-            >
-              <div className="h-2 w-2 flex-shrink-0 rounded-full bg-accent-violet shadow-[0_0_8px_rgba(139,92,246,0.8)]" />
-              <span className="max-w-[120px] truncate text-xs font-semibold sm:max-w-[200px]">
-                {mapTitle}
-              </span>
-              <span className="text-[10px] text-text-faint">✎</span>
-            </button>
-          )}
-        </div>
-
-        {/* Save — top-right */}
-        {mapId && (
-          <button
-            onClick={handleSave}
-            disabled={saveStatus === "saving"}
-            style={{ position: "absolute", right: "1.25rem", top: "1.25rem" }}
-            className={`rounded-full border px-3 py-2 text-xs font-medium backdrop-blur-sm transition-all disabled:opacity-50 sm:px-4 ${
-              saveStatus === "saved"
-                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                : saveStatus === "error"
-                ? "border-red-500/40 bg-red-500/10 text-red-300"
-                : "border-border-subtle bg-bg-card/80 text-text-muted hover:text-text-primary"
-            }`}
+      {/* ── Map title — top-center ── */}
+      <div className="pointer-events-auto absolute left-1/2 top-3 z-20 -translate-x-1/2 sm:top-5">
+        {editingTitle ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setMapTitle(titleDraft);
+              setEditingTitle(false);
+            }}
           >
-            <span className="sm:hidden">{saveStatus === "saved" ? "✓" : saveStatus === "error" ? "!" : "💾"}</span>
-            <span className="hidden sm:inline">{saveLabel}</span>
+            <input
+              autoFocus
+              className="w-36 rounded-full border border-accent-violet/40 bg-bg-card/80 px-3 py-2 text-xs font-semibold text-text-primary outline-none backdrop-blur-sm sm:w-52"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={() => { setMapTitle(titleDraft); setEditingTitle(false); }}
+            />
+          </form>
+        ) : (
+          <button
+            onClick={() => { setTitleDraft(mapTitle); setEditingTitle(true); }}
+            className="flex items-center gap-2 rounded-full border border-border-subtle bg-bg-card/80 px-3 py-2 backdrop-blur-sm transition-colors hover:border-accent-violet/40"
+          >
+            <div className="h-2 w-2 flex-shrink-0 rounded-full bg-accent-violet shadow-[0_0_8px_rgba(139,92,246,0.8)]" />
+            <span className="max-w-[110px] truncate text-xs font-semibold sm:max-w-[220px]">
+              {mapTitle}
+            </span>
+            <span className="text-[10px] text-text-faint">✎</span>
           </button>
         )}
       </div>
+
+      {/* ── Save button — top-right ── */}
+      {mapId && (
+        <button
+          onClick={handleSave}
+          disabled={saveStatus === "saving"}
+          className={`pointer-events-auto absolute right-3 top-3 z-20 rounded-full border px-3 py-2 text-xs font-medium backdrop-blur-sm transition-all disabled:opacity-50 sm:right-5 sm:top-5 sm:px-4 ${
+            saveStatus === "saved"
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+              : saveStatus === "error"
+              ? "border-red-500/40 bg-red-500/10 text-red-300"
+              : "border-border-subtle bg-bg-card/80 text-text-muted hover:text-text-primary"
+          }`}
+        >
+          <span className="sm:hidden">{saveStatus === "saved" ? "✓" : saveStatus === "error" ? "!" : "💾"}</span>
+          <span className="hidden sm:inline">{saveLabel}</span>
+        </button>
+      )}
 
       {/* ── Node-type toolbar ── */}
       <Toolbar />
