@@ -54,6 +54,17 @@ interface MindMapState {
     edges: MindEdge[],
   ) => void;
 
+  // Build a full map from an AI import result (replaces current canvas)
+  loadImport: (
+    title: string,
+    branches: Array<{
+      kind: string;
+      title: string;
+      description: string;
+      children: Array<{ kind: string; title: string; description: string }>;
+    }>,
+  ) => void;
+
   // Update just the title
   setMapTitle: (title: string) => void;
 
@@ -177,6 +188,89 @@ export const useMindMap = create<MindMapState>()(
       loadMap: (mapId, mapTitle, nodes, edges) => {
         const safeNodes = nodes.length > 0 ? nodes : createInitialMap().nodes;
         set({ mapId, mapTitle, nodes: safeNodes, edges, selectedId: null });
+      },
+
+      loadImport: (title, branches) => {
+        const validKinds: NodeKind[] = ["idea", "task", "budget", "place", "event"];
+        const toKind = (k: string): NodeKind =>
+          validKinds.includes(k as NodeKind) ? (k as NodeKind) : "idea";
+
+        const rootNode: MindNode = {
+          id: ROOT_NODE_ID,
+          type: "root",
+          position: { x: 0, y: 0 },
+          data: { kind: "root", title },
+          draggable: true,
+          deletable: false,
+        };
+
+        const newNodes: MindNode[] = [rootNode];
+        const newEdges: MindEdge[] = [];
+
+        const branchCount = branches.length;
+        branches.forEach((branch, bi) => {
+          // Spread branches radially, starting from the top
+          const bAngle = (Math.PI * 2 * bi) / branchCount - Math.PI / 2;
+          const bRadius = 300;
+          const bx = Math.cos(bAngle) * bRadius;
+          const by = Math.sin(bAngle) * bRadius;
+          const bKind = toKind(branch.kind);
+          const branchId = nextId();
+
+          newNodes.push({
+            id: branchId,
+            type: bKind,
+            position: { x: bx, y: by },
+            data: {
+              ...defaultDataFor(bKind, branch.title),
+              description: branch.description,
+            } as MindNodeData,
+          });
+          newEdges.push({
+            id: `e_root_${branchId}`,
+            source: ROOT_NODE_ID,
+            target: branchId,
+            animated: true,
+          });
+
+          // Fan children outward from the branch in the same radial direction
+          const childCount = branch.children.length;
+          branch.children.forEach((child, ci) => {
+            const spread = Math.PI / 3; // 60° total fan
+            const cAngle =
+              bAngle + (ci - (childCount - 1) / 2) * (spread / Math.max(childCount - 1, 1));
+            const cRadius = 220;
+            const childId = nextId();
+            const cKind = toKind(child.kind);
+
+            newNodes.push({
+              id: childId,
+              type: cKind,
+              position: {
+                x: bx + Math.cos(cAngle) * cRadius,
+                y: by + Math.sin(cAngle) * cRadius,
+              },
+              data: {
+                ...defaultDataFor(cKind, child.title),
+                description: child.description,
+              } as MindNodeData,
+            });
+            newEdges.push({
+              id: `e_${branchId}_${childId}`,
+              source: branchId,
+              target: childId,
+              animated: true,
+            });
+          });
+        });
+
+        set({
+          nodes: newNodes,
+          edges: newEdges,
+          selectedId: null,
+          mapTitle: title,
+          mapId: null,
+        });
       },
 
       setMapTitle: (title) => set({ mapTitle: title }),

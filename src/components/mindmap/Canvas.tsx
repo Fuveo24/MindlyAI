@@ -20,6 +20,7 @@ import NodeEditor from "./NodeEditor";
 import AskTheMap from "./AskTheMap";
 import TimelineView from "./TimelineView";
 import CostEstimator from "./CostEstimator";
+import ImportView from "./ImportView";
 
 type Panel = "ask" | "cost" | null;
 
@@ -39,6 +40,7 @@ function CanvasInner() {
   const [titleDraft, setTitleDraft] = useState("");
   const [panel, setPanel] = useState<Panel>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_e, node) => select(node.id),
@@ -140,6 +142,7 @@ function CanvasInner() {
         <MapToolButton active={panel === "ask"} onClick={() => togglePanel("ask")} icon="🧠" label="Ask the Map" />
         <MapToolButton active={timelineOpen} onClick={() => setTimelineOpen(true)} icon="🗓" label="Timeline" />
         <MapToolButton active={panel === "cost"} onClick={() => togglePanel("cost")} icon="💸" label="Costs" />
+        <MapToolButton active={importOpen} onClick={() => setImportOpen(true)} icon="⬆" label="Import" />
         <MapToolButton active={false} onClick={handleExport} icon="⬇" label="Export" />
       </div>
 
@@ -147,6 +150,7 @@ function CanvasInner() {
       {panel === "ask" && <AskTheMap onClose={() => setPanel(null)} />}
       {panel === "cost" && <CostEstimator onClose={() => setPanel(null)} />}
       {timelineOpen && <TimelineView onClose={() => setTimelineOpen(false)} />}
+      {importOpen && <ImportView onClose={() => setImportOpen(false)} />}
 
       {/* ── Canvas ── */}
       <ReactFlow

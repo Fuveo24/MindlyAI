@@ -7,7 +7,9 @@
       "Bash(npx tsc:*)",
       "Bash(echo \"EXIT=$?\")",
       "Bash(npx next:*)",
-      "Bash(grep -n \"max_tokens\" c:/Users/ALANT/OneDrive/Документы/MindMapApp/src/app/api/ai/*/route.ts)"
+      "Bash(grep -n \"max_tokens\" c:/Users/ALANT/OneDrive/Документы/MindMapApp/src/app/api/ai/*/route.ts)",
+      "Bash(cd \"C:\\\\\\\\Users\\\\\\\\ALANT\\\\\\\\OneDrive\\\\\\\\Документы\\\\\\\\MindMapApp\")",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }
