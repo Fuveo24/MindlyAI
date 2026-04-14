@@ -34,6 +34,7 @@ function CanvasInner() {
   const onEdgesChange = useMindMap((s) => s.onEdgesChange);
   const onConnect = useMindMap((s) => s.onConnect);
   const select = useMindMap((s) => s.select);
+  const mode = useMindMap((s) => s.mode);
 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [editingTitle, setEditingTitle] = useState(false);
@@ -162,13 +163,24 @@ function CanvasInner() {
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
+        defaultEdgeOptions={
+          mode === "code"
+            ? { type: "smoothstep", animated: true, style: { stroke: "#22d3ee", strokeWidth: 1.5 } }
+            : { animated: true }
+        }
+        snapToGrid={mode === "code"}
+        snapGrid={[20, 20]}
         fitView
         fitViewOptions={{ padding: 0.4 }}
         minZoom={0.2}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={28} size={1.5} color="#1f1f2e" />
+        {mode === "code" ? (
+          <Background variant={BackgroundVariant.Lines} gap={20} size={0.5} color="#0d2231" />
+        ) : (
+          <Background variant={BackgroundVariant.Dots} gap={28} size={1.5} color="#1f1f2e" />
+        )}
         <Controls position="bottom-right" showInteractive={false} />
       </ReactFlow>
     </>

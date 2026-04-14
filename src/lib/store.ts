@@ -65,6 +65,21 @@ interface MindMapState {
     }>,
   ) => void;
 
+  // Build a code pipeline from AI-generated code blocks (replaces current canvas, switches to code mode)
+  loadCodeImport: (
+    title: string,
+    blocks: Array<{
+      title: string;
+      language: string;
+      code: string;
+      description: string;
+    }>,
+  ) => void;
+
+  // Canvas mode
+  mode: "mindmap" | "code";
+  setMode: (mode: "mindmap" | "code") => void;
+
   // Update just the title
   setMapTitle: (title: string) => void;
 
@@ -89,6 +104,8 @@ function defaultDataFor(kind: NodeKind, title: string): MindNodeData {
       return { kind, title, location: "" };
     case "event":
       return { kind, title, startAt: "", location: "" };
+    case "code":
+      return { kind, title, language: "javascript", code: "" };
   }
 }
 
@@ -100,6 +117,7 @@ export const useMindMap = create<MindMapState>()(
       selectedId: null,
       mapId: null,
       mapTitle: "New Project",
+      mode: "mindmap" as "mindmap" | "code",
 
       onNodesChange: (changes) =>
         set({ nodes: applyNodeChanges(changes, get().nodes) as MindNode[] }),
@@ -269,9 +287,48 @@ export const useMindMap = create<MindMapState>()(
           edges: newEdges,
           selectedId: null,
           mapTitle: title,
-          mapId: null,
+          // Keep mapId so the Save button stays visible after import
         });
       },
+
+      loadCodeImport: (title, blocks) => {
+        const STEP_X = 420; // horizontal spacing between code nodes
+
+        const newNodes: MindNode[] = blocks.map((block, i) => ({
+          id: nextId(),
+          type: "code" as NodeKind,
+          position: { x: i * STEP_X, y: 0 },
+          data: {
+            kind: "code" as const,
+            title: block.title,
+            language: block.language,
+            code: block.code,
+            description: block.description,
+          },
+        }));
+
+        const newEdges: MindEdge[] = newNodes.slice(0, -1).map((node, i) => ({
+          id: `e_code_${i}`,
+          source: node.id,
+          target: newNodes[i + 1].id,
+          sourceHandle: "out",
+          targetHandle: "in",
+          type: "smoothstep",
+          animated: true,
+          style: { stroke: "#22d3ee", strokeWidth: 1.5 },
+        }));
+
+        set({
+          nodes: newNodes,
+          edges: newEdges,
+          selectedId: null,
+          mapTitle: title,
+          // Keep mapId so the Save button stays visible after import
+          mode: "code",
+        });
+      },
+
+      setMode: (mode) => set({ mode }),
 
       setMapTitle: (title) => set({ mapTitle: title }),
 

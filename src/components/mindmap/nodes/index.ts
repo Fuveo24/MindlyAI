@@ -4,6 +4,7 @@ import TaskNode from "./TaskNode";
 import BudgetNode from "./BudgetNode";
 import PlaceNode from "./PlaceNode";
 import EventNode from "./EventNode";
+import CodeNode from "./CodeNode";
 
 /**
  * The map we pass to React Flow's `nodeTypes` prop. Keys match the
@@ -16,4 +17,5 @@ export const nodeTypes = {
   budget: BudgetNode,
   place: PlaceNode,
   event: EventNode,
+  code: CodeNode,
 };

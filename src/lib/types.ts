@@ -10,7 +10,8 @@ export type NodeKind =
   | "task"
   | "budget"
   | "place"
-  | "event";
+  | "event"
+  | "code";
 
 /**
  * React Flow requires node data to extend Record<string, unknown>.
@@ -67,13 +68,22 @@ export type EventData = {
   location?: string;
 } & WithIndex;
 
+export type CodeData = {
+  kind: "code";
+  title: string;
+  language: string;
+  code: string;
+  description?: string;
+} & WithIndex;
+
 export type MindNodeData =
   | RootData
   | IdeaData
   | TaskData
   | BudgetData
   | PlaceData
-  | EventData;
+  | EventData
+  | CodeData;
 
 export type MindNode = Node<MindNodeData, NodeKind>;
 export type MindEdge = Edge;

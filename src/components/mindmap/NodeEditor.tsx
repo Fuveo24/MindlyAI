@@ -95,6 +95,7 @@ export default function NodeEditor() {
     budget: "Budget",
     place: "Place",
     event: "Event",
+    code: "Code Block",
   };
 
   const busy = loadingExpand || loadingGenerate;

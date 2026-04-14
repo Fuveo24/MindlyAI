@@ -9,7 +9,20 @@
       "Bash(npx next:*)",
       "Bash(grep -n \"max_tokens\" c:/Users/ALANT/OneDrive/Документы/MindMapApp/src/app/api/ai/*/route.ts)",
       "Bash(cd \"C:\\\\\\\\Users\\\\\\\\ALANT\\\\\\\\OneDrive\\\\\\\\Документы\\\\\\\\MindMapApp\")",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(node -e \"require\\('@distube/ytdl-core'\\); console.log\\('ok'\\)\")",
+      "Bash(node -e ':*)",
+      "Bash(timeout 25 node -e ':*)",
+      "Bash(yt-dlp --version)",
+      "Bash(node -e \" const yi = require\\('youtubei.js'\\); // Check Innertube.create signature type const yt_proto = yi.Innertube; console.log\\('Innertube.create:', typeof yt_proto.create\\); \")",
+      "Bash(xargs grep:*)",
+      "Bash(timeout 30 node -e ':*)",
+      "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\);const p=JSON.parse\\(d\\);console.log\\('type:',p.type,'exports:',JSON.stringify\\(Object.keys\\(p.exports||{}\\)\\).slice\\(0,100\\),'main:',p.main,'module:',p.module\\)\")",
+      "Bash(node -e \"const p=require\\('c:/Users/ALANT/OneDrive/Документы/MindMapApp/node_modules/youtubei.js/package.json'\\);console.log\\('type:',p.type,'main:',p.main\\)\")",
+      "Bash(node -e \"const p=require\\('c:/Users/ALANT/OneDrive/Документы/MindMapApp/node_modules/youtubei.js/dist/package.json'\\);console.log\\('type:',p.type,'main:',p.main,'exports:',JSON.stringify\\(p.exports\\).slice\\(0,200\\)\\)\")",
+      "Bash(node -e \"const p=require\\('c:/Users/ALANT/OneDrive/Документы/MindMapApp/node_modules/next/package.json'\\);console.log\\('next version:',p.version\\)\")",
+      "Bash(node --input-type=module)",
+      "Bash(node -e \"const s='\\\\x5cu0026'; console.log\\('input:',JSON.stringify\\(s\\),'len:',s.length\\); const m=s.match\\(/[\\\\\\\\\\\\\\\\]u\\([0-9a-fA-F]{4}\\)/\\); console.log\\('match:',m?m[0]:'NO','len:',m?m[0].length:0,'cap:',m?m[1]:'N/A'\\); const c=s.replace\\(/[\\\\\\\\\\\\\\\\]u\\([0-9a-fA-F]{4}\\)/g,\\(_,h\\)=>String.fromCharCode\\(parseInt\\(h,16\\)\\)\\); console.log\\('decoded:',JSON.stringify\\(c\\)\\);\")"
     ]
   }
 }
