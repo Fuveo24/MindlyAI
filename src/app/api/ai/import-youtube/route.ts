@@ -107,7 +107,7 @@ async function transcribeYouTube(videoId: string): Promise<string> {
   const container = mimeMatch?.[1] ?? "mp4";
   const ext = container === "mp4" ? "m4a" : container;
 
-  const audioFile = new File([audioBuffer], `audio.${ext}`, {
+  const audioFile = new File([new Uint8Array(audioBuffer)], `audio.${ext}`, {
     type: `audio/${container}`,
   });
 
