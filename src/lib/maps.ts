@@ -33,9 +33,10 @@ export async function fetchMap(id: string): Promise<MapRecord> {
     .from("maps")
     .select("id, user_id, title, nodes, edges, updated_at")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
+  if (!data) throw new Error("Map not found.");
   return data as MapRecord;
 }
 

@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import https from "node:https";
 
 export const runtime = "nodejs";
-// Allow up to 5 min for audio download + Whisper transcription of longer videos
 export const maxDuration = 300;
 
 interface YoutubeRequest {
   url: string;
 }
 
-/** Extract the 11-character video ID from any common YouTube URL format */
 function extractVideoId(url: string): string | null {
   const patterns = [
     /(?:youtube\.com\/watch\?(?:.*&)?v=)([a-zA-Z0-9_-]{11})/,
@@ -27,58 +26,90 @@ function extractVideoId(url: string): string | null {
 }
 
 /**
- * Downloads the audio from a YouTube video using the ANDROID Innertube client,
- * which returns non-ciphered stream URLs and works without a decipher function.
- * The audio buffer is then sent to OpenAI Whisper for transcription.
+ * Downloads a URL using node:https directly, bypassing Next.js's instrumented
+ * global fetch (which interferes with YouTube's CDN responses).
+ */
+function downloadBuffer(urlStr: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const req = https.get(
+      urlStr,
+      {
+        headers: {
+          "User-Agent":
+            "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip",
+          Accept: "*/*",
+        },
+      },
+      (res) => {
+        if (res.statusCode !== 200) {
+          reject(new Error(`CDN responded with HTTP ${res.statusCode}`));
+          return;
+        }
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+        res.on("error", reject);
+      },
+    );
+    req.on("error", reject);
+  });
+}
+
+/**
+ * Uses the Innertube ANDROID client (via youtubei.js) to get a direct audio
+ * stream URL, then downloads it with node:https and transcribes with Whisper.
+ *
+ * Why this approach:
+ * - ANDROID client returns pre-decrypted CDN URLs (no JS decipher needed)
+ * - node:https bypasses Next.js's fetch instrumentation which breaks CDN downloads
  */
 async function transcribeYouTube(videoId: string): Promise<string> {
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured in your environment.");
+    throw new Error("OPENAI_API_KEY is not set in your .env.local.");
   }
 
   const { Innertube, ClientType } = await import("youtubei.js");
 
-  // The ANDROID client bypasses YouTube's JS-based signature/cipher requirements
   const yt = await Innertube.create({
     client_type: ClientType.ANDROID,
     generate_session_locally: true,
   });
 
-  // Check duration before downloading anything
   const info = await yt.getBasicInfo(videoId, { client: "ANDROID" });
-  const durationSec = info.basic_info.duration ?? 0;
 
+  const durationSec = info.basic_info.duration ?? 0;
   if (durationSec === 0) {
     throw new Error(
-      "Could not determine video duration — the video may be unavailable or private.",
+      "Video not found or unavailable.",
     );
   }
   if (durationSec > 900) {
     throw new Error(
-      `Video is ${Math.round(durationSec / 60)} minutes long. Please use videos under 15 minutes.`,
+      `Video is ${Math.round(durationSec / 60)} min long — please use videos under 15 minutes.`,
     );
   }
 
-  // Stream audio (lowest bitrate to minimise bandwidth & processing time)
-  const stream = await yt.download(videoId, {
-    type: "audio",
-    quality: "best",
-    format: "any",
-    client: "ANDROID",
-  });
+  // Pick the lowest-bitrate audio-only format to minimise download size
+  const formats = info.streaming_data?.adaptive_formats ?? [];
+  const audioFmt = formats
+    .filter((f) => f.has_audio && !f.has_video && f.url)
+    .sort((a, b) => (a.average_bitrate ?? 999999) - (b.average_bitrate ?? 999999))[0];
 
-  // Collect stream into a Buffer
-  const chunks: Uint8Array[] = [];
-  const reader = (stream as ReadableStream<Uint8Array>).getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) chunks.push(value);
+  if (!audioFmt?.url) {
+    throw new Error("No audio stream available for this video.");
   }
-  const audioBuffer = Buffer.concat(chunks.map((c) => Buffer.from(c)));
 
-  // Send to Whisper — ANDROID streams are mp4 audio
-  const audioFile = new File([audioBuffer], "audio.m4a", { type: "audio/mp4" });
+  // Download via node:https to bypass Next.js fetch instrumentation
+  const audioBuffer = await downloadBuffer(audioFmt.url);
+
+  // Determine container from mime type (e.g. "audio/mp4" → "m4a")
+  const mimeMatch = audioFmt.mime_type.match(/^audio\/([^;]+)/);
+  const container = mimeMatch?.[1] ?? "mp4";
+  const ext = container === "mp4" ? "m4a" : container;
+
+  const audioFile = new File([audioBuffer], `audio.${ext}`, {
+    type: `audio/${container}`,
+  });
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const transcription = await openai.audio.transcriptions.create({
@@ -113,13 +144,6 @@ Rules:
 - descriptions ≤ 20 words
 - raw JSON only — no markdown, no code fences`;
 
-/**
- * POST /api/ai/import-youtube
- *
- * Downloads YouTube audio via Innertube ANDROID client, transcribes with Whisper,
- * then synthesises a mind map structure with Claude.
- * Works on any public YouTube video under 15 minutes — no captions required.
- */
 export async function POST(req: Request) {
   let body: YoutubeRequest;
   try {
@@ -137,10 +161,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Step 1: Download + Whisper transcription
     const transcript = await transcribeYouTube(videoId);
 
-    // Step 2: Claude synthesises transcript → mind map JSON
     const client = new Anthropic();
     const message = await client.messages.create({
       model: "claude-opus-4-5",
@@ -155,7 +177,6 @@ export async function POST(req: Request) {
 
     const raw =
       message.content[0].type === "text" ? message.content[0].text.trim() : "";
-
     const jsonStart = raw.indexOf("{");
     const jsonEnd = raw.lastIndexOf("}");
     if (jsonStart === -1 || jsonEnd === -1) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { fetchMap } from "@/lib/maps";
 import { useMindMap } from "@/lib/store";
@@ -20,6 +20,8 @@ export default function MapPage() {
   const loadMap = useMindMap((s) => s.loadMap);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Guard against duplicate fetches from React StrictMode / multiple auth events
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -27,6 +29,8 @@ export default function MapPage() {
       return;
     }
     if (!user) return;
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
 
     fetchMap(id)
       .then((map) => {
