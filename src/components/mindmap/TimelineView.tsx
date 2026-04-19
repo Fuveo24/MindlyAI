@@ -17,18 +17,24 @@ const phaseColors = [
   "from-rose-400 to-red-500",
 ];
 
+// Module-level cache — persists across open/close within the same session
+let _result: TimelineResult | null = null;
+let _error: string | null = null;
+
 export default function TimelineView({ onClose }: Props) {
   const nodes = useMindMap((s) => s.nodes);
   const mapTitle = useMindMap((s) => s.mapTitle);
 
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<TimelineResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<TimelineResult | null>(_result);
+  const [error, setError] = useState<string | null>(_error);
 
   const generate = async () => {
     setLoading(true);
     setError(null);
     setResult(null);
+    _result = null;
+    _error = null;
     try {
       const res = await fetch("/api/ai/timeline", {
         method: "POST",
@@ -36,9 +42,13 @@ export default function TimelineView({ onClose }: Props) {
         body: JSON.stringify({ nodes }),
       });
       if (!res.ok) throw new Error(await res.text());
-      setResult((await res.json()) as TimelineResult);
+      const data = (await res.json()) as TimelineResult;
+      setResult(data);
+      _result = data;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
+      const msg = e instanceof Error ? e.message : "Failed";
+      setError(msg);
+      _error = msg;
     } finally {
       setLoading(false);
     }
@@ -66,8 +76,9 @@ export default function TimelineView({ onClose }: Props) {
             <button
               onClick={generate}
               className="text-xs text-text-faint hover:text-text-muted"
+              title="Regenerate"
             >
-              ↺
+              ↺ Regenerate
             </button>
           )}
           <button
@@ -88,6 +99,11 @@ export default function TimelineView({ onClose }: Props) {
             <p className="max-w-md px-4 text-sm text-text-muted">
               Claude reads all your nodes and turns them into a phased, week-by-week execution plan.
             </p>
+            {error && (
+              <div className="max-w-md rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                {error}
+              </div>
+            )}
             <button onClick={generate} className="btn-primary mt-2">
               ✦ Generate timeline
             </button>
@@ -101,12 +117,6 @@ export default function TimelineView({ onClose }: Props) {
           </div>
         )}
 
-        {error && (
-          <div className="mx-auto mt-8 max-w-md rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-            {error}
-          </div>
-        )}
-
         {result && (
           <div className="space-y-8">
             {result.summary && (
@@ -115,14 +125,14 @@ export default function TimelineView({ onClose }: Props) {
               </p>
             )}
 
-            {/* Mobile: vertical stack | Desktop: horizontal grid */}
+            {/* Mobile: vertical stack */}
             <div className="block lg:hidden space-y-3">
               {result.phases.map((phase, i) => (
                 <PhaseCard key={i} phase={phase} index={i} />
               ))}
             </div>
 
-            {/* Desktop horizontal with connector track */}
+            {/* Desktop: horizontal with connector track */}
             <div className="relative hidden lg:block">
               <div className="absolute left-0 right-0 top-5 h-px bg-gradient-to-r from-transparent via-accent-violet/40 to-transparent" />
               <div
@@ -133,7 +143,6 @@ export default function TimelineView({ onClose }: Props) {
               >
                 {result.phases.map((phase, i) => (
                   <div key={i} className="flex flex-col items-center">
-                    {/* Dot */}
                     <div
                       className={`relative z-10 mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white shadow-[0_0_16px_rgba(139,92,246,0.4)] ${phaseColors[i % phaseColors.length]}`}
                     >
@@ -167,17 +176,13 @@ function PhaseCard({
       <div
         className={`mb-1 h-[2px] w-6 rounded-full bg-gradient-to-r ${phaseColors[index % phaseColors.length]}`}
       />
-
-      {/* Mobile: show number badge */}
       {!compact && (
         <div className={`mb-3 inline-flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br text-xs font-bold text-white lg:hidden ${phaseColors[index % phaseColors.length]}`}>
           {index + 1}
         </div>
       )}
-
       <h4 className="text-sm font-semibold leading-tight">{phase.label}</h4>
       <p className="mt-1 text-[11px] leading-relaxed text-text-faint">{phase.focus}</p>
-
       <ul className="mt-3 space-y-1.5">
         {phase.items.map((item, j) => (
           <li key={j} className="flex items-start gap-2">

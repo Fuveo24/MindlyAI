@@ -17,11 +17,22 @@ import {
   type NodeKind,
 } from "./types";
 
+interface HistoryEntry {
+  nodes: MindNode[];
+  edges: MindEdge[];
+}
+
+const MAX_HISTORY = 20;
+
 interface MindMapState {
   // Canvas data
   nodes: MindNode[];
   edges: MindEdge[];
   selectedId: string | null;
+
+  // Undo history (snapshots before destructive ops)
+  history: HistoryEntry[];
+  undo: () => void;
 
   // Active map metadata (set when opening a cloud map)
   mapId: string | null;
@@ -43,7 +54,14 @@ interface MindMapState {
   // AI-assisted: add several child nodes linked to a parent
   addAiChildren: (
     parentId: string,
-    children: Array<{ title: string; description?: string; kind?: string }>,
+    children: Array<{
+      title: string;
+      description?: string;
+      kind?: string;
+      // code-specific fields (only used when kind === "code")
+      language?: string;
+      code?: string;
+    }>,
   ) => void;
 
   // Load a map from Supabase into the store
@@ -115,9 +133,22 @@ export const useMindMap = create<MindMapState>()(
       nodes: createInitialMap().nodes,
       edges: createInitialMap().edges,
       selectedId: null,
+      history: [],
       mapId: null,
       mapTitle: "New Project",
       mode: "mindmap" as "mindmap" | "code",
+
+      undo: () => {
+        const hist = get().history;
+        if (hist.length === 0) return;
+        const prev = hist[hist.length - 1];
+        set({
+          nodes: prev.nodes,
+          edges: prev.edges,
+          history: hist.slice(0, -1),
+          selectedId: null,
+        });
+      },
 
       onNodesChange: (changes) =>
         set({ nodes: applyNodeChanges(changes, get().nodes) as MindNode[] }),
@@ -153,11 +184,15 @@ export const useMindMap = create<MindMapState>()(
 
       deleteNode: (id) => {
         if (id === ROOT_NODE_ID) return;
+        // Snapshot current state before deletion so it can be undone
+        const { nodes, edges, history } = get();
         set({
-          nodes: get().nodes.filter((n) => n.id !== id),
-          edges: get().edges.filter(
-            (e) => e.source !== id && e.target !== id,
-          ),
+          history: [
+            ...history.slice(-MAX_HISTORY + 1),
+            { nodes, edges },
+          ],
+          nodes: nodes.filter((n) => n.id !== id),
+          edges: edges.filter((e) => e.source !== id && e.target !== id),
           selectedId: get().selectedId === id ? null : get().selectedId,
         });
       },
@@ -170,7 +205,7 @@ export const useMindMap = create<MindMapState>()(
 
         const { x: baseX, y: baseY } = parent.position;
         const radius = 260;
-        const validKinds: NodeKind[] = ["idea", "task", "budget", "place", "event"];
+        const validKinds: NodeKind[] = ["idea", "task", "budget", "place", "event", "code"];
 
         const newNodes: MindNode[] = children.map((c, i) => {
           const angle =
@@ -179,6 +214,19 @@ export const useMindMap = create<MindMapState>()(
             validKinds.includes(c.kind as NodeKind)
               ? (c.kind as NodeKind)
               : "idea";
+
+          const baseData = defaultDataFor(kind, c.title);
+          // Merge in description + code-specific fields when provided
+          const data: MindNodeData =
+            kind === "code"
+              ? {
+                  ...baseData,
+                  description: c.description,
+                  language: c.language ?? "javascript",
+                  code: c.code ?? "",
+                } as MindNodeData
+              : { ...baseData, description: c.description } as MindNodeData;
+
           return {
             id: nextId(),
             type: kind,
@@ -186,7 +234,7 @@ export const useMindMap = create<MindMapState>()(
               x: baseX + Math.cos(angle) * radius,
               y: baseY + Math.sin(angle) * radius,
             },
-            data: defaultDataFor(kind, c.title),
+            data,
           };
         });
 
@@ -205,7 +253,7 @@ export const useMindMap = create<MindMapState>()(
 
       loadMap: (mapId, mapTitle, nodes, edges) => {
         const safeNodes = nodes.length > 0 ? nodes : createInitialMap().nodes;
-        set({ mapId, mapTitle, nodes: safeNodes, edges, selectedId: null });
+        set({ mapId, mapTitle, nodes: safeNodes, edges, selectedId: null, history: [] });
       },
 
       loadImport: (title, branches) => {
@@ -227,7 +275,6 @@ export const useMindMap = create<MindMapState>()(
 
         const branchCount = branches.length;
         branches.forEach((branch, bi) => {
-          // Spread branches radially, starting from the top
           const bAngle = (Math.PI * 2 * bi) / branchCount - Math.PI / 2;
           const bRadius = 300;
           const bx = Math.cos(bAngle) * bRadius;
@@ -251,10 +298,9 @@ export const useMindMap = create<MindMapState>()(
             animated: true,
           });
 
-          // Fan children outward from the branch in the same radial direction
           const childCount = branch.children.length;
           branch.children.forEach((child, ci) => {
-            const spread = Math.PI / 3; // 60° total fan
+            const spread = Math.PI / 3;
             const cAngle =
               bAngle + (ci - (childCount - 1) / 2) * (spread / Math.max(childCount - 1, 1));
             const cRadius = 220;
@@ -287,12 +333,12 @@ export const useMindMap = create<MindMapState>()(
           edges: newEdges,
           selectedId: null,
           mapTitle: title,
-          // Keep mapId so the Save button stays visible after import
+          history: [],
         });
       },
 
       loadCodeImport: (title, blocks) => {
-        const STEP_X = 420; // horizontal spacing between code nodes
+        const STEP_X = 420;
 
         const newNodes: MindNode[] = blocks.map((block, i) => ({
           id: nextId(),
@@ -323,8 +369,8 @@ export const useMindMap = create<MindMapState>()(
           edges: newEdges,
           selectedId: null,
           mapTitle: title,
-          // Keep mapId so the Save button stays visible after import
           mode: "code",
+          history: [],
         });
       },
 
@@ -339,12 +385,13 @@ export const useMindMap = create<MindMapState>()(
           edges: fresh.edges,
           selectedId: null,
           mapTitle: "New Project",
+          history: [],
         });
       },
     }),
     {
       name: "mindly-map",
-      // Persist the canvas data locally; mapId is resolved from the URL
+      // Persist canvas data only; history is session-only
       partialize: (state) => ({
         nodes: state.nodes,
         edges: state.edges,

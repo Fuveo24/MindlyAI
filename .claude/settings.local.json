@@ -23,7 +23,10 @@
       "Bash(node -e \"const p=require\\('c:/Users/ALANT/OneDrive/Документы/MindMapApp/node_modules/next/package.json'\\);console.log\\('next version:',p.version\\)\")",
       "Bash(node --input-type=module)",
       "Bash(node -e \"const s='\\\\x5cu0026'; console.log\\('input:',JSON.stringify\\(s\\),'len:',s.length\\); const m=s.match\\(/[\\\\\\\\\\\\\\\\]u\\([0-9a-fA-F]{4}\\)/\\); console.log\\('match:',m?m[0]:'NO','len:',m?m[0].length:0,'cap:',m?m[1]:'N/A'\\); const c=s.replace\\(/[\\\\\\\\\\\\\\\\]u\\([0-9a-fA-F]{4}\\)/g,\\(_,h\\)=>String.fromCharCode\\(parseInt\\(h,16\\)\\)\\); console.log\\('decoded:',JSON.stringify\\(c\\)\\);\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const pkg = require\\('./node_modules/openai/package.json'\\); console.log\\(pkg.version\\);\")",
+      "Bash(node -e \"const { toFile } = require\\('./node_modules/openai/uploads'\\); console.log\\(typeof toFile\\);\")",
+      "Bash(node -e \"import\\('./node_modules/openai/uploads.mjs'\\).then\\(m => console.log\\(typeof m.toFile\\)\\).catch\\(e => console.log\\(e.message\\)\\);\")"
     ]
   }
 }

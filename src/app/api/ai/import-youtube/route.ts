@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
-import https from "node:https";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 interface YoutubeRequest {
   url: string;
@@ -26,62 +24,23 @@ function extractVideoId(url: string): string | null {
 }
 
 /**
- * Downloads a URL using node:https directly, bypassing Next.js's instrumented
- * global fetch (which interferes with YouTube's CDN responses).
- */
-function downloadBuffer(urlStr: string): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    const req = https.get(
-      urlStr,
-      {
-        headers: {
-          "User-Agent":
-            "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip",
-          Accept: "*/*",
-        },
-      },
-      (res) => {
-        if (res.statusCode !== 200) {
-          reject(new Error(`CDN responded with HTTP ${res.statusCode}`));
-          return;
-        }
-        res.on("data", (chunk: Buffer) => chunks.push(chunk));
-        res.on("end", () => resolve(Buffer.concat(chunks)));
-        res.on("error", reject);
-      },
-    );
-    req.on("error", reject);
-  });
-}
-
-/**
- * Uses the Innertube ANDROID client (via youtubei.js) to get a direct audio
- * stream URL, then downloads it with node:https and transcribes with Whisper.
+ * Fetches the transcript for a YouTube video using the caption tracks
+ * embedded in the page's ytInitialPlayerResponse (via youtubei.js).
  *
- * Why this approach:
- * - ANDROID client returns pre-decrypted CDN URLs (no JS decipher needed)
- * - node:https bypasses Next.js's fetch instrumentation which breaks CDN downloads
+ * YouTube's audio CDN now requires PO Tokens for server-side access, so
+ * we extract captions instead — which work without any special auth,
+ * cover virtually all English videos (auto-generated), and are faster
+ * than downloading + transcribing audio.
  */
-async function transcribeYouTube(videoId: string): Promise<string> {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not set in your .env.local.");
-  }
+async function getTranscript(videoId: string): Promise<string> {
+  const { Innertube } = await import("youtubei.js");
 
-  const { Innertube, ClientType } = await import("youtubei.js");
-
-  const yt = await Innertube.create({
-    client_type: ClientType.ANDROID,
-    generate_session_locally: true,
-  });
-
-  const info = await yt.getBasicInfo(videoId, { client: "ANDROID" });
+  const yt = await Innertube.create({ generate_session_locally: true });
+  const info = await yt.getBasicInfo(videoId);
 
   const durationSec = info.basic_info.duration ?? 0;
   if (durationSec === 0) {
-    throw new Error(
-      "Video not found or unavailable.",
-    );
+    throw new Error("Video not found or unavailable.");
   }
   if (durationSec > 900) {
     throw new Error(
@@ -89,35 +48,43 @@ async function transcribeYouTube(videoId: string): Promise<string> {
     );
   }
 
-  // Pick the lowest-bitrate audio-only format to minimise download size
-  const formats = info.streaming_data?.adaptive_formats ?? [];
-  const audioFmt = formats
-    .filter((f) => f.has_audio && !f.has_video && f.url)
-    .sort((a, b) => (a.average_bitrate ?? 999999) - (b.average_bitrate ?? 999999))[0];
-
-  if (!audioFmt?.url) {
-    throw new Error("No audio stream available for this video.");
+  const tracks = info.captions?.caption_tracks ?? [];
+  if (tracks.length === 0) {
+    throw new Error(
+      "No captions found for this video. YouTube import works with videos that have auto-generated or manual captions (most English videos qualify).",
+    );
   }
 
-  // Download via node:https to bypass Next.js fetch instrumentation
-  const audioBuffer = await downloadBuffer(audioFmt.url);
+  // Prefer English captions; fall back to first available track
+  const track =
+    tracks.find((t) => t.language_code?.startsWith("en")) ?? tracks[0];
 
-  // Determine container from mime type (e.g. "audio/mp4" → "m4a")
-  const mimeMatch = audioFmt.mime_type.match(/^audio\/([^;]+)/);
-  const container = mimeMatch?.[1] ?? "mp4";
-  const ext = container === "mp4" ? "m4a" : container;
-
-  const audioFile = new File([new Uint8Array(audioBuffer)], `audio.${ext}`, {
-    type: `audio/${container}`,
+  // Fetch as JSON3 — structured caption events with timed text segments
+  const captionUrl = track.base_url + "&fmt=json3";
+  const res = await fetch(captionUrl, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible)" },
   });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch captions (HTTP ${res.status}).`);
+  }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const transcription = await openai.audio.transcriptions.create({
-    file: audioFile,
-    model: "whisper-1",
-  });
+  const data = (await res.json()) as {
+    events?: Array<{ segs?: Array<{ utf8?: string }> }>;
+  };
 
-  return transcription.text;
+  const transcript = (data.events ?? [])
+    .filter((e) => e.segs)
+    .map((e) => e.segs!.map((s) => s.utf8 ?? "").join(""))
+    .join(" ")
+    .replace(/\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!transcript) {
+    throw new Error("Caption track was empty.");
+  }
+
+  return transcript;
 }
 
 const SYNTH_PROMPT = `You are given a transcript of a YouTube video.
@@ -161,7 +128,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const transcript = await transcribeYouTube(videoId);
+    const transcript = await getTranscript(videoId);
 
     const client = new Anthropic();
     const message = await client.messages.create({
@@ -176,7 +143,9 @@ export async function POST(req: Request) {
     });
 
     const raw =
-      message.content[0].type === "text" ? message.content[0].text.trim() : "";
+      message.content[0].type === "text"
+        ? message.content[0].text.trim()
+        : "";
     const jsonStart = raw.indexOf("{");
     const jsonEnd = raw.lastIndexOf("}");
     if (jsonStart === -1 || jsonEnd === -1) {
@@ -185,6 +154,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(JSON.parse(raw.slice(jsonStart, jsonEnd + 1)));
   } catch (err) {
+    console.error("[import-youtube]", err);
     const message =
       err instanceof Error ? err.message : "YouTube import failed";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -9,7 +9,7 @@ import {
   type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useMindMap } from "@/lib/store";
 import { saveMap } from "@/lib/maps";
@@ -35,6 +35,8 @@ function CanvasInner() {
   const onConnect = useMindMap((s) => s.onConnect);
   const select = useMindMap((s) => s.select);
   const mode = useMindMap((s) => s.mode);
+  const undo = useMindMap((s) => s.undo);
+  const canUndo = useMindMap((s) => s.history.length > 0);
 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [editingTitle, setEditingTitle] = useState(false);
@@ -64,6 +66,21 @@ function CanvasInner() {
   };
 
   const handleExport = () => exportMarkdown(nodes, edges, mapTitle);
+
+  // Ctrl+Z / Cmd+Z global undo
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        // Don't intercept when user is typing in an input or textarea
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [undo]);
 
   const saveLabel =
     saveStatus === "saving" ? "Saving…"
@@ -145,6 +162,9 @@ function CanvasInner() {
         <MapToolButton active={panel === "cost"} onClick={() => togglePanel("cost")} icon="💸" label="Costs" />
         <MapToolButton active={importOpen} onClick={() => setImportOpen(true)} icon="⬆" label="Import" />
         <MapToolButton active={false} onClick={handleExport} icon="⬇" label="Export" />
+        {canUndo && (
+          <MapToolButton active={false} onClick={undo} icon="↩" label="Undo" />
+        )}
       </div>
 
       {/* ── Panels ── */}

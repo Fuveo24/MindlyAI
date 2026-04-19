@@ -88,7 +88,7 @@ Rules:
 - missing_nodes: categories or topics completely absent that would strengthen the plan (max 5 items)
 - weak_areas: existing nodes/branches that are vague, incomplete, or thin (max 5 items)
 - contradictions: logical conflicts, duplicated effort, or unrealistic combinations (max 4 items)
-- suggestions: concrete, actionable next steps (max 5 items)
+- suggestions: concrete, actionable next steps — always provide exactly 4 to 5 items, never fewer
 - Each item is a short, plain-English sentence (max 15 words)
 - If a category has nothing to report, return an empty array
 - No prose outside the JSON`;

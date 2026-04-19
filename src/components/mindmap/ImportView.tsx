@@ -42,6 +42,17 @@ declare const webkitSpeechRecognition: new () => ISpeechRecognition;
 
 const MAX_TEXT = 50000;
 
+// Module-level cache — persists across open/close within the same session
+let _tab: Tab = "photo";
+let _preview: ImportResult | null = null;
+let _codePreview: CodeImportResult | null = null;
+let _ytUrl = "";
+let _text = "";
+let _programDesc = "";
+let _programLang = "javascript";
+let _transcript = "";
+let _error: string | null = null;
+
 const CODE_LANGUAGES = [
   { id: "javascript", label: "JavaScript" },
   { id: "typescript", label: "TypeScript" },
@@ -60,20 +71,24 @@ export default function ImportView({ onClose }: Props) {
   const loadCodeImport = useMindMap((s) => s.loadCodeImport);
   const mode = useMindMap((s) => s.mode);
 
-  // Default to "program" in code mode, "photo" otherwise
-  const [tab, setTab] = useState<Tab>(mode === "code" ? "program" : "photo");
+  // Default to "program" in code mode, restore cached tab otherwise
+  const [tab, setTab] = useState<Tab>(mode === "code" ? "program" : _tab);
 
   // Shared result / loading state
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<ImportResult | null>(null);
+  const [error, setError] = useState<string | null>(_error);
+  const [preview, setPreview] = useState<ImportResult | null>(_preview);
 
-  const reset = () => { setError(null); setPreview(null); setLoading(false); };
+  const reset = () => {
+    setError(null); _error = null;
+    setPreview(null); _preview = null;
+    setLoading(false);
+  };
 
   // ── Program / code generation state ───────────────────────────────────────
-  const [programDesc, setProgramDesc] = useState("");
-  const [programLang, setProgramLang] = useState("javascript");
-  const [codePreview, setCodePreview] = useState<CodeImportResult | null>(null);
+  const [programDesc, setProgramDesc] = useState(_programDesc);
+  const [programLang, setProgramLang] = useState(_programLang);
+  const [codePreview, setCodePreview] = useState<CodeImportResult | null>(_codePreview);
 
   // ── Photo state ────────────────────────────────────────────────────────
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -81,17 +96,17 @@ export default function ImportView({ onClose }: Props) {
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   // ── YouTube state ──────────────────────────────────────────────────────
-  const [ytUrl, setYtUrl] = useState("");
+  const [ytUrl, setYtUrl] = useState(_ytUrl);
 
   // ── Audio / recording state ────────────────────────────────────────────
   const [recording, setRecording] = useState(false);
-  const [transcript, setTranscript] = useState("");
+  const [transcript, setTranscript] = useState(_transcript);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const speechSupported = typeof window !== "undefined" &&
     ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
 
   // ── Text state ─────────────────────────────────────────────────────────
-  const [text, setText] = useState("");
+  const [text, setText] = useState(_text);
 
   // Clean up image object URL on unmount / change
   useEffect(() => {
@@ -109,7 +124,10 @@ export default function ImportView({ onClose }: Props) {
 
   async function generateProgram() {
     if (!programDesc.trim()) return;
-    setLoading(true); setError(null); setCodePreview(null); setPreview(null);
+    setLoading(true);
+    setError(null); _error = null;
+    setCodePreview(null); _codePreview = null;
+    setPreview(null); _preview = null;
     try {
       const res = await fetch("/api/ai/import-code", {
         method: "POST",
@@ -119,7 +137,11 @@ export default function ImportView({ onClose }: Props) {
       const data = await res.json() as { error?: string } & CodeImportResult;
       if (!res.ok) throw new Error(data.error ?? "Code generation failed");
       setCodePreview(data as CodeImportResult);
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+      _codePreview = data as CodeImportResult;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed";
+      setError(msg); _error = msg;
+    }
     finally { setLoading(false); }
   }
 
@@ -149,7 +171,9 @@ export default function ImportView({ onClose }: Props) {
 
   async function generateFromYouTube() {
     if (!ytUrl.trim()) return;
-    setLoading(true); setError(null); setPreview(null);
+    setLoading(true);
+    setError(null); _error = null;
+    setPreview(null); _preview = null;
     try {
       const res = await fetch("/api/ai/import-youtube", {
         method: "POST",
@@ -159,7 +183,11 @@ export default function ImportView({ onClose }: Props) {
       const data = await res.json() as { error?: string } & ImportResult;
       if (!res.ok) throw new Error(data.error ?? "YouTube import failed");
       setPreview(data as ImportResult);
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+      _preview = data as ImportResult;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed";
+      setError(msg); _error = msg;
+    }
     finally { setLoading(false); }
   }
 
@@ -177,6 +205,7 @@ export default function ImportView({ onClose }: Props) {
         else interim += e.results[i][0].transcript;
       }
       setTranscript(final + interim);
+      _transcript = final + interim;
     };
     rec.onerror = () => setRecording(false);
     rec.onend = () => setRecording(false);
@@ -192,7 +221,9 @@ export default function ImportView({ onClose }: Props) {
 
   async function generateFromAudio() {
     if (!transcript.trim()) return;
-    setLoading(true); setError(null); setPreview(null);
+    setLoading(true);
+    setError(null); _error = null;
+    setPreview(null); _preview = null;
     try {
       const res = await fetch("/api/ai/import", {
         method: "POST",
@@ -202,13 +233,19 @@ export default function ImportView({ onClose }: Props) {
       const data = await res.json() as { error?: string } & ImportResult;
       if (!res.ok) throw new Error(data.error ?? "Import failed");
       setPreview(data as ImportResult);
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+      _preview = data as ImportResult;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed";
+      setError(msg); _error = msg;
+    }
     finally { setLoading(false); }
   }
 
   async function generateFromText() {
     if (!text.trim()) return;
-    setLoading(true); setError(null); setPreview(null);
+    setLoading(true);
+    setError(null); _error = null;
+    setPreview(null); _preview = null;
     try {
       const res = await fetch("/api/ai/import", {
         method: "POST",
@@ -218,7 +255,11 @@ export default function ImportView({ onClose }: Props) {
       const data = await res.json() as { error?: string } & ImportResult;
       if (!res.ok) throw new Error(data.error ?? "Import failed");
       setPreview(data as ImportResult);
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+      _preview = data as ImportResult;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed";
+      setError(msg); _error = msg;
+    }
     finally { setLoading(false); }
   }
 
@@ -266,7 +307,7 @@ export default function ImportView({ onClose }: Props) {
           {tabs.map((t) => (
             <button
               key={t.id}
-              onClick={() => { setTab(t.id); reset(); setCodePreview(null); }}
+              onClick={() => { setTab(t.id); _tab = t.id; reset(); setCodePreview(null); _codePreview = null; }}
               className={`flex flex-shrink-0 flex-1 items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-medium transition-all ${
                 tab === t.id
                   ? t.id === "program"
@@ -300,7 +341,7 @@ export default function ImportView({ onClose }: Props) {
                   {CODE_LANGUAGES.map((l) => (
                     <button
                       key={l.id}
-                      onClick={() => setProgramLang(l.id)}
+                      onClick={() => { setProgramLang(l.id); _programLang = l.id; }}
                       className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all ${
                         programLang === l.id
                           ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40"
@@ -317,7 +358,7 @@ export default function ImportView({ onClose }: Props) {
               <label className="mb-1 block text-[11px] font-medium text-cyan-600">Program description</label>
               <textarea
                 value={programDesc}
-                onChange={(e) => setProgramDesc(e.target.value)}
+                onChange={(e) => { setProgramDesc(e.target.value); _programDesc = e.target.value; }}
                 onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) generateProgram(); }}
                 placeholder={`Describe the program you want to build…\n\nExamples:\n• "A REST API that fetches weather data and caches it in Redis"\n• "A Python script that reads a CSV, cleans the data, and plots a chart"\n• "A CLI tool that renames files in bulk using regex patterns"`}
                 rows={7}
@@ -399,7 +440,7 @@ export default function ImportView({ onClose }: Props) {
                   type="url"
                   placeholder="https://www.youtube.com/watch?v=..."
                   value={ytUrl}
-                  onChange={(e) => setYtUrl(e.target.value)}
+                  onChange={(e) => { setYtUrl(e.target.value); _ytUrl = e.target.value; }}
                   onKeyDown={(e) => e.key === "Enter" && generateFromYouTube()}
                   className="flex-1 rounded-xl border border-border-subtle bg-bg-base/60 px-3 py-2 text-sm text-text-primary placeholder:text-text-faint focus:border-accent-violet/50 focus:outline-none"
                 />
@@ -412,8 +453,7 @@ export default function ImportView({ onClose }: Props) {
                 </button>
               </div>
               <p className="mt-2 text-[11px] text-text-faint">
-                Works with any public YouTube video that has captions or auto-generated subtitles.
-                Most videos qualify — YouTube auto-generates transcripts for nearly all English content.
+                Works with any public YouTube video under 15 minutes. YouTube auto-generates captions for nearly all English content — no manual subtitles needed.
               </p>
             </div>
           </div>
@@ -450,7 +490,7 @@ export default function ImportView({ onClose }: Props) {
                   <div className="w-full max-w-lg space-y-2 px-4">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-medium text-text-faint">Transcript</span>
-                      <button onClick={() => setTranscript("")} className="text-[11px] text-text-faint hover:text-text-muted">
+                      <button onClick={() => { setTranscript(""); _transcript = ""; }} className="text-[11px] text-text-faint hover:text-text-muted">
                         Clear
                       </button>
                     </div>
@@ -476,7 +516,7 @@ export default function ImportView({ onClose }: Props) {
           <div className="space-y-3">
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => { setText(e.target.value); _text = e.target.value; }}
               placeholder={"Paste an article, meeting notes, research paper, or any long-form text…\n\nClaude will read it and turn it into an organized mind map."}
               rows={14}
               className="w-full resize-y rounded-xl border border-border-subtle bg-bg-card/60 px-4 py-3 text-sm leading-relaxed text-text-primary placeholder:text-text-faint focus:border-accent-violet/50 focus:outline-none focus:ring-1 focus:ring-accent-violet/30"
@@ -589,7 +629,7 @@ export default function ImportView({ onClose }: Props) {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setPreview(null)}
+                  onClick={() => { setPreview(null); _preview = null; }}
                   className="rounded-lg border border-border-subtle px-3 py-1.5 text-xs text-text-muted hover:text-text-primary"
                 >
                   ← Retry
